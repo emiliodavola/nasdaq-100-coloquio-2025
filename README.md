@@ -9,13 +9,11 @@ Este repositorio contiene la presentación del análisis econométrico completo 
 ```
 ├── docs/                    # Documentación y presentaciones
 │   └── presentacion.html    # Presentación principal del coloquio
-├── assets/                  # Recursos estáticos
-│   ├── styles.css           # Estilos personalizados
-│   └── theme-toggle.html    # Componente de cambio de tema
-└── .github/                 # Configuración del repositorio
-    └── copilot-instructions.md
+└── assets/                  # Recursos estáticos
+    ├── styles.css           # Estilos personalizados
+    └── theme-toggle.html    # Componente de cambio de tema
 ```
 
 ## Presentación
 
-Abrir `docs/presentacion.html` en el navegador.
+Abrir `src/presentacion.html` en el navegador.
