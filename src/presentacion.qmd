@@ -1,0 +1,1215 @@
+---
+title: "Volatilidad en los rendimientos de NASDAQ-100 (NQ=F)"
+subtitle: "Análisis mediante modelo GARCH"
+author: "Emilio Correa Dávola"
+date: 2025-09-11
+format:
+  revealjs:
+    theme: white
+    transition: slide
+    background-transition: fade
+    highlight-style: github
+    code-block-background: true
+    code-block-border-left: "#31BAE9"
+    slide-number: true
+    footer: "UNTreF"
+    logo: ""
+    css: ../assets/styles.css
+    self-contained: true
+    embed-resources: true
+    include-after-body: ../assets/theme-toggle.html
+lang: es-ES
+---
+
+```{r}
+#| label: setup
+#| echo: false
+#| warning: false
+#| message: false
+
+library(yahoofinancer)
+library(flextable)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(purrr)
+library(tibble)
+library(stringr)
+library(scales)
+library(jtools)
+library(WeightedPortTest)
+library(rugarch)
+library(DescTools)
+library(xts)
+library(forecast)
+library(qrcode)
+
+set_flextable_defaults(
+  font.family = "Arial",
+  decimal.mark = ",",
+  big.mark = "."
+)
+
+options(OutDec = ",")
+decimals <- 4
+
+# Cargar datos
+nasdaq100 <-
+  Ticker$new("NQ=F")$get_history(
+    start = "2015-01-01",
+    end = "2024-12-31",
+    interval = "1d"
+  ) |>
+  select(date, close) |>
+  mutate(
+    date = date(date),
+    close = ifelse(is.na(close), stats::lag(close), close),
+    performance = c(NA, diff(log(close), lag = 1)),
+  ) |>
+  as_tibble() |>
+  drop_na()
+
+# Crear variable crisis
+nasdaq100 <-
+  nasdaq100 |>
+  mutate(
+    crisis =
+      case_when(
+        between(date, as.Date("2020-02-01"), as.Date("2020-04-30")) ~ 1,
+        TRUE ~ 0
+      )
+  )
+
+# Crear matriz de dummies
+dummies <- model.matrix(
+  object = ~ crisis - 1,
+  data = nasdaq100 |> select(crisis)
+)
+
+# Especificación del modelo
+spec <-
+  ugarchspec(
+    variance.model = list(
+      model = "eGARCH",
+      garchOrder = c(1, 1),
+      submodel = NULL,
+      external.regressors = dummies,
+      variance.targeting = FALSE
+    ),
+    mean.model = list(
+      armaOrder = c(0, 0),
+      include.mean = TRUE,
+      archm = TRUE,
+      arfima = FALSE
+    ),
+    distribution.model = "sstd",
+    fixed.pars = list(mu = 0)
+  )
+
+# Ajustar modelo
+fit <-
+  ugarchfit(
+    spec = spec,
+    data = nasdaq100 |> select(-close, -crisis) |> as.xts(),
+    solver = "hybrid",
+    solver.control = list(
+      n.restarts = 20,
+      start.init = "random",
+      rseed = 42,
+      trace = 0
+    )
+  )
+```
+
+## Pasos previos
+
+### Objetivos
+
+- **Analizar la volatilidad** de una serie de tiempo de frecuencia moderada o alta.
+- **Modelar** mediante la familia **GARCH** y **capturar** comportamientos complejos y asimétricos.
+- Período de análisis extenso: **2015-2024**.
+
+\
+
+### Hipótesis
+
+::: {.callout-important}
+La familia de modelos **GARCH** resulta adecuada para modelar la volatilidad del NASDAQ-100 (NQ=F), logrando mayor precisión predictiva y explicando adecuadamente los clusters de volatilidad. 
+:::
+
+---
+
+## Análisis exploratorio
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Visualización
+
+```{r}
+#| label: fig-rendimientos
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+nasdaq100 |>
+  ggplot(aes(x = date, y = performance)) +
+  geom_line(color = "steelblue", alpha = 0.8, size = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red", alpha = 0.7) +
+  scale_x_date(
+    date_labels = "%Y",
+    date_breaks = "1 year",
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  scale_y_continuous(
+    name = "Rendimiento",
+    labels = label_percent(big.mark = ".", decimal.mark = ","),
+    expand = expansion(mult = c(0.05, 0.05))
+  ) +
+  labs(
+    title = "Rendimientos diarios del NASDAQ-100 (NQ=F)",
+    subtitle = "Período 2015-2024",
+    x = "",
+    caption = "Fuente: Yahoo Finance"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Estadísticas Descriptivas
+
+```{r}
+#| label: tbl-estadisticas-descriptivas
+#| echo: false
+#| warning: false
+
+nasdaq100 |>
+  summarise(
+    N = n(),
+    Media = mean(performance, na.rm = TRUE),
+    `Desvío Std` = sd(performance, na.rm = TRUE),
+    Mínimo = min(performance, na.rm = TRUE),
+    Máximo = max(performance, na.rm = TRUE),
+    Kurtosis = DescTools::Kurt(performance, na.rm = TRUE, method = 1),
+    Asimetría = DescTools::Skew(performance, na.rm = TRUE)
+  ) |>
+  mutate(
+    Media = format(round(Media, 4), decimal.mark = ",", nsmall = 4),
+    `Desvío Std` = format(round(`Desvío Std`, 4), decimal.mark = ",", nsmall = 4),
+    Mínimo = format(round(Mínimo, 4), decimal.mark = ",", nsmall = 4),
+    Máximo = format(round(Máximo, 4), decimal.mark = ",", nsmall = 4),
+    Kurtosis = format(round(Kurtosis, 2), decimal.mark = ",", nsmall = 2),
+    Asimetría = format(round(Asimetría, 2), decimal.mark = ",", nsmall = 2)
+  ) |>
+  flextable() |>
+  set_header_labels(
+    N = "N",
+    Media = "Media",
+    `Desvío Std` = "Desvío Std",
+    Mínimo = "Mínimo",
+    Máximo = "Máximo",
+    Kurtosis = "Exc. Kurtosis¹",
+    Asimetría = "Asimetría"
+  ) |>
+  align(j = 2:7, align = "right", part = "all") |>
+  add_footer_lines("¹ Exceso de Kurtosis = K - 3") |>
+  width(j = 1, width = 1) |>
+  width(j = 2:7, width = 1.2) |>
+  theme_box()
+```
+:::
+
+::::
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Densidad de Rendimientos vs Normal
+
+```{r}
+#| label: fig-densidad-exploratorio
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+nasdaq100 |>
+  ggplot() +
+  geom_histogram(
+    aes(x = performance, y = after_stat(density), fill = "Histograma empírico"),
+    colour = "gray50",
+    alpha = 0.5,
+    bins = 80
+  ) +
+  geom_density(
+    aes(x = performance, color = "Densidad empírica"),
+    alpha = 0.3,
+    size = 0.8
+  ) +
+  stat_function(
+    fun = dnorm,
+    aes(color = "Distribución normal teórica"),
+    args = list(
+      mean = mean(nasdaq100$performance),
+      sd = sd(nasdaq100$performance)
+    ),
+    size = 0.8
+  ) +
+  scale_color_manual(
+    name = "Curvas",
+    values = c(
+      "Densidad empírica" = "red",
+      "Distribución normal teórica" = "deepskyblue"
+    )
+  ) +
+  scale_fill_manual(
+    name = "Curvas",
+    values = c("Histograma empírico" = "gray50")
+  ) +
+  scale_x_continuous(
+    name = "Rendimiento",
+    labels = label_percent(big.mark = ".", decimal.mark = ","),
+    limits = c(-0.12, 0.12)
+  ) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dashed",
+    color = "black",
+    size = 0.3
+  ) +
+  labs(
+    title = "Densidad de Rendimientos vs Distribución Normal",
+    subtitle = "Evidencia de colas pesadas y asimetría",
+    y = "Densidad"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 8),
+    legend.key.size = unit(0.5, "lines")
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Evolución de Kurtosis y Asimetría
+
+```{r}
+#| label: fig-kurtosis-asimetria
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+nasdaq100 |>
+  mutate(
+    yq = floor_date(date, "quarter")
+  ) |>
+  group_by(yq) |>
+  summarise(
+    `Exceso kurtosis` = DescTools::Kurt(performance, na.rm = TRUE, method = 1),
+    Asimetría = DescTools::Skew(performance, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  pivot_longer(
+    cols = c(`Exceso kurtosis`, Asimetría),
+    names_to = "Variable",
+    values_to = "Valor"
+  ) |>
+  mutate(Variable = Variable |> factor()) |>
+  ggplot(aes(x = yq, y = Valor, col = Variable)) +
+  geom_line(size = 0.8) +
+  geom_point(size = 1.5) +
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    color = "black",
+    size = 0.3
+  ) +
+  scale_y_continuous(name = "Valor") +
+  scale_x_date(
+    name = "",
+    date_labels = "%Y",
+    date_breaks = "1 year"
+  ) +
+  labs(
+    title = "Evolución del Exceso de Kurtosis y Asimetría",
+    subtitle = "NASDAQ-100 (NQ=F) - Agregación trimestral"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+:::
+
+::::
+
+---
+
+## Análisis exploratorio (2)
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Análisis de Autocorrelación
+
+```{r}
+#| label: fig-autocorrelacion
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 4,
+    main = "Autocorrelación Simple de los Rendimientos",
+    sub = "NASDAQ-100 (NQ=F) - Evidencia de dependencia serial",
+    xlab = "Rezago",
+    ylab = "ACF"
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Autocorrelación de Rendimientos al Cuadrado
+
+```{r}
+#| label: fig-autocorr-cuadrado
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 5,
+    main = "Autocorrelación de Rendimientos al Cuadrado",
+    sub = "NASDAQ-100 (NQ=F) - Evidencia de clusters de volatilidad",
+    xlab = "Rezago",
+    ylab = "ACF"
+  )
+```
+:::
+
+::::
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Autocorrelación de Valores Absolutos
+
+```{r}
+#| label: fig-autocorr-absolutos
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 6,
+    main = "Autocorrelación de Valores Absolutos",
+    sub = "NASDAQ-100 (NQ=F) - Persistencia en volatilidad",
+    xlab = "Rezago",
+    ylab = "ACF"
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Pruebas de Heterocedasticidad (ARCH)
+
+```{r}
+#| label: fig-arch-exploratorio
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+# Función para pruebas ARCH
+do_arch_test <- function(x, max_lag = 5) {
+  suppressMessages(require(FinTS))
+
+  do_single_arch <- function(x, used_lag) {
+    test_out <- FinTS::ArchTest(x, lags = used_lag)
+
+    tibble(
+      Lag = used_lag,
+      `LMStatistic` = test_out$statistic,
+      `pvalue` = test_out$p.value
+    )
+  }
+
+  map_dfr(1:max_lag, .f = do_single_arch, x = x)
+}
+
+# Realizar pruebas ARCH y crear gráfico lollipop
+nasdaq100 |>
+  select(performance) |>
+  pull() |>
+  do_arch_test(max_lag = 10) |>
+  mutate(
+    significativo = ifelse(`pvalue` < 0.05, "Significativo", "No significativo")
+  ) |>
+  ggplot(aes(x = Lag, y = `pvalue`)) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", size = 0.8) +
+  geom_segment(aes(x = Lag, xend = Lag, y = 0, yend = `pvalue`, color = significativo),
+    size = 0.8
+  ) +
+  geom_point(aes(color = significativo), size = 3) +
+  scale_x_continuous(
+    name = "Lag",
+    breaks = 1:10,
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  scale_y_continuous(
+    name = "p-valor",
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) format(x, decimal.mark = ",", nsmall = 3)
+  ) +
+  scale_color_manual(
+    name = "",
+    values = c("Significativo" = "red", "No significativo" = "darkgreen")
+  ) +
+  labs(
+    title = "Pruebas de Heterocedasticidad ARCH",
+    subtitle = "H_0: No hay efectos ARCH en los rendimientos",
+    caption = "Línea roja: α = 0,05"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
+```
+:::
+
+::::
+
+## Modelo
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Especificación del Modelo EGARCH-M(1,1)
+
+$$
+ \begin{aligned}
+r_t &= \lambda \sigma_t + \varepsilon_t \\
+\varepsilon_t &= \sigma_t z_t, \quad z_t \overset{iid}{\sim} \mathcal{T}(0, 1,\nu, \xi) \\
+\ln(\sigma_t^2) &= \omega + \alpha_1 \left(\frac{|\varepsilon_{t-1}|}{\sigma_{t-1}} - \sqrt{\frac{2}{\pi}}\right) \\
+&+ \gamma_1 \frac{\varepsilon_{t-1}}{\sigma_{t-1}} + \beta_1 \ln(\sigma_{t-1}^2) + \delta d_t
+\end{aligned}
+$$
+
+::: {.callout-note}
+#### Efectos Principales
+
+- **λ = `r round(fit@fit$coef["archm"], 4)`**: Prima de riesgo **positiva**
+- **α₁ = `r round(fit@fit$coef["alpha1"], 3)`**: **Efecto ARCH** significativo
+- **β₁ = `r round(fit@fit$coef["beta1"], 3)`**: **Alta persistencia** de volatilidad
+- **γ₁ = `r round(fit@fit$coef["gamma1"], 3)`**: **Efecto leverage** significativo
+- **ν = `r round(fit@fit$coef["shape"], 2)`**: Colas pesadas confirmadas
+- **ξ = `r round(fit@fit$coef["skew"], 3)`**: Leve asimetría positiva
+- **δ = `r round(fit@fit$coef["vxreg1"], 3)`**: Aumento de volatilidad durante crisis COVID-19
+:::
+
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Coeficientes del Modelo
+
+```{r}
+#| label: tbl-coeficientes
+#| echo: false
+#| warning: false
+
+fit |>
+  pluck("fit") |>
+  pluck("matcoef") |>
+  as_tibble(rownames = "term") |>
+  left_join(
+    fit |>
+      pluck("fit") |>
+      pluck("robust.matcoef") |>
+      as_tibble(rownames = "term") |>
+      select(-` Estimate`),
+    by = c("term" = "term")
+  ) |>
+  mutate(
+    term = case_when(
+      term == "archm" ~ "λ (prima riesgo)",
+      term == "omega" ~ "ω (constante)",
+      term == "alpha1" ~ "α₁ (ARCH)",
+      term == "beta1" ~ "β₁ (GARCH)",
+      term == "gamma1" ~ "γ₁ (asimetría)",
+      term == "vxreg1" ~ "δ (crisis COVID)",
+      term == "shape" ~ "ν (grados libertad)",
+      term == "skew" ~ "ξ (asimetría dist.)",
+      TRUE ~ term
+    ),
+    ` Estimate` = round(` Estimate`, 4),
+    ` Std. Error.x` = round(` Std. Error.x`, 4),
+    `Pr(>|t|).x` = ifelse(`Pr(>|t|).x` < 0.001, "< 0,001",
+      round(`Pr(>|t|).x`, 3)
+    )
+  ) |>
+  select(term, ` Estimate`, ` Std. Error.x`, `Pr(>|t|).x`) |>
+  flextable() |>
+  set_header_labels(
+    term = "Parámetro",
+    ` Estimate` = "Estimación",
+    ` Std. Error.x` = "Error Estándar",
+    `Pr(>|t|).x` = "p-valor"
+  ) |>
+  width(j = 1, width = 2) |>
+  width(j = 2:4, width = 1.2) |>
+  theme_box()
+```
+
+:::
+
+::::
+
+## Diagnóstico del Modelo
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Densidad de Residuos
+
+```{r}
+#| label: fig-densidad
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 8,
+    main = "Densidad de Residuos Estandarizados",
+    sub = "NASDAQ-100 EGARCH-M(1,1) con distribución T de Student asimétrica",
+    xlab = "Residuos estandarizados",
+    ylab = "Densidad"
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### QQ-Plot de Residuos
+
+```{r}
+#| label: fig-qqplot
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 9,
+    main = "QQ-Plot de Residuos Estandarizados",
+    sub = "NASDAQ-100 EGARCH-M(1,1) con distribución T de Student asimétrica",
+    xlab = "Cuantiles teóricos",
+    ylab = "Cuantiles muestrales"
+  )
+```
+:::
+
+::::
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Volatilidad Condicional
+
+```{r}
+#| label: fig-volatilidad
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 3,
+    main = "Evolución de la Volatilidad Condicional",
+    sub = "NASDAQ-100 EGARCH-M(1,1) con distribución T de Student asimétrica",
+    xlab = "Fecha",
+    ylab = "Volatilidad condicional"
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### News-Impact Curve
+
+```{r}
+#| label: fig-newsimpact
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+fit |>
+  plot(
+    which = 12,
+    main = "News-Impact Curve",
+    sub = "NASDAQ-100 EGARCH-M(1,1) con distribución T de Student asimétrica",
+    xlab = "Choque estandarizado",
+    ylab = "Volatilidad condicional"
+  )
+```
+
+:::
+
+::::
+
+## Diagnóstico del Modelo (2)
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Pruebas de Ljung-Box
+
+```{r}
+#| label: fig-ljungbox
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+# Pruebas Ljung-Box para lags 1-15
+ljung_results <- map_dfr(
+  .x = 1:15,
+  .f = function(lag_val) {
+    Weighted.Box.test(
+      x = fit@fit[["z"]],
+      lag = lag_val,
+      fitdf = 0,
+      weighted = TRUE
+    ) |>
+      broom::tidy() |>
+      mutate(
+        lag = lag_val
+      )
+  }
+) |>
+  select(lag, `p-valor` = p.value)
+
+# Gráfico lollipop
+ljung_results |>
+  mutate(
+    significativo = ifelse(`p-valor` < 0.05, "Significativo", "No significativo")
+  ) |>
+  ggplot(aes(x = lag, y = `p-valor`)) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", size = 0.8) +
+  geom_segment(aes(x = lag, xend = lag, y = 0, yend = `p-valor`, color = significativo),
+    size = 0.8
+  ) +
+  geom_point(aes(color = significativo), size = 3) +
+  scale_x_continuous(
+    name = "Lag",
+    breaks = 1:15,
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  scale_y_continuous(
+    name = "p-valor",
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) format(x, decimal.mark = ",", nsmall = 3)
+  ) +
+  scale_color_manual(
+    name = "",
+    values = c("Significativo" = "red", "No significativo" = "darkgreen")
+  ) +
+  labs(
+    title = "Pruebas de Ljung-Box para Residuos Estandarizados",
+    subtitle = "H_0: No hay autocorrelación serial en los residuos",
+    caption = "Línea roja: α = 0,05"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  )
+```
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Pruebas ARCH
+
+```{r}
+#| label: fig-arch
+#| fig-height: 4
+#| echo: false
+#| warning: false
+
+# Pruebas ARCH para lags 3-15
+arch_results <- map_dfr(
+  .x = 3:15,
+  .f = function(lag_val) {
+    WeightedPortTest::Weighted.LM.test(
+      x = fit |> residuals(),
+      lag = lag_val,
+      type = "correlation",
+      h.t = fit@fit[["var"]],
+      fitdf = 2
+    ) |>
+      broom::tidy() |>
+      mutate(
+        lag = lag_val
+      )
+  }
+) |>
+  select(lag, `p-valor` = p.value)
+
+# Gráfico lollipop
+arch_results |>
+  mutate(
+    significativo = ifelse(`p-valor` < 0.05, "Significativo", "No significativo")
+  ) |>
+  ggplot(aes(x = lag, y = `p-valor`)) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red", size = 0.8) +
+  geom_segment(aes(x = lag, xend = lag, y = 0, yend = `p-valor`, color = significativo),
+    size = 0.8
+  ) +
+  geom_point(aes(color = significativo), size = 3) +
+  scale_x_continuous(
+    name = "Lag",
+    breaks = 3:15,
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  scale_y_continuous(
+    name = "p-valor",
+    expand = expansion(mult = c(0, 0.05)),
+    labels = function(x) format(x, decimal.mark = ",", nsmall = 3)
+  ) +
+  scale_color_manual(
+    name = "",
+    values = c("Significativo" = "red", "No significativo" = "darkgreen")
+  ) +
+  labs(
+    title = "Pruebas ARCH Weighted LM",
+    subtitle = "H_0: No hay heterocedasticidad condicional residual",
+    caption = "Línea roja: α = 0,05"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank()
+  )
+```
+:::
+
+::::
+
+:::: {.columns}
+
+::: {.column width="47.5%"}
+
+### Prueba de Bondad de Ajuste
+
+```{r}
+#| label: tbl-bondad-ajuste
+#| echo: false
+#| warning: false
+
+# Prueba de bondad de ajuste de Pearson
+bondad_ajuste <- fit |>
+  gof(c(20, 30, 40, 50)) |>
+  as_tibble() |>
+  select(
+    Grupos = group,
+    Estadístico = statistic,
+    `p-valor` = `p-value(g-1)`
+  ) |>
+  mutate(
+    Estadístico = format(round(Estadístico, 3), decimal.mark = ",", nsmall = 3),
+    `p-valor` = case_when(
+      as.numeric(str_replace(`p-valor`, ",", ".")) < 0.001 ~ "< 0,001",
+      TRUE ~ format(round(as.numeric(str_replace(`p-valor`, ",", ".")), 4),
+        decimal.mark = ",", nsmall = 4
+      )
+    ),
+    Resultado = ifelse(as.numeric(str_replace(`p-valor`, ",", ".")) < 0.05 | `p-valor` == "< 0,001",
+      "✗ Rechaza H₀", "No rechaza H₀"
+    )
+  )
+
+bondad_ajuste |>
+  flextable() |>
+  set_header_labels(
+    Grupos = "Grupos",
+    Estadístico = "Estadístico χ²",
+    `p-valor` = "p-valor",
+    Resultado = "Resultado"
+  ) |>
+  align(j = c("Estadístico", "p-valor"), align = "right", part = "all") |>
+  width(j = 1, width = 1.5) |>
+  width(j = 2:4, width = 1.5) |>
+  theme_box()
+```
+
+:::
+
+::: {.column width="5%"}
+
+:::
+
+::: {.column width="47.5%"}
+
+### Pruebas de asimetría de los residuos
+
+```{r}
+#| label: tbl-asimetria
+#| echo: false
+#| warning: false
+
+# Prueba de asimetría de residuos (sign bias)
+asimetria_results <- fit |>
+  signbias() |>
+  as.data.frame() |>
+  rownames_to_column(var = "Parámetro") |>
+  select(Parámetro, Estadístico = `t-value`, `p-valor` = prob) |>
+  mutate(
+    Estadístico = format(round(Estadístico, 3), decimal.mark = ",", nsmall = 3),
+    `p-valor` = case_when(
+      as.numeric(str_replace(`p-valor`, ",", ".")) < 0.001 ~ "< 0,001",
+      TRUE ~ format(round(as.numeric(str_replace(`p-valor`, ",", ".")), 4),
+        decimal.mark = ",", nsmall = 4
+      )
+    ),
+    Resultado = ifelse(as.numeric(str_replace(`p-valor`, ",", ".")) < 0.05 | `p-valor` == "< 0,001",
+      "✗ Rechaza H₀", "No rechaza H₀"
+    )
+  )
+
+asimetria_results |>
+  flextable() |>
+  set_header_labels(
+    Parámetro = "Parámetro",
+    Estadístico = "Estadístico t",
+    `p-valor` = "p-valor",
+    Resultado = "Resultado"
+  ) |>
+  align(j = c("Estadístico", "p-valor"), align = "right", part = "all") |>
+  width(j = 1, width = 2) |>
+  width(j = 2:4, width = 1.2) |>
+  theme_box()
+```
+:::
+
+::::
+
+---
+
+## Diagnóstico del Modelo (3)
+
+### Prueba de Estabilidad de Nyblom
+
+```{r}
+#| label: tbl-nyblom
+#| echo: false
+#| warning: false
+
+# Prueba de Nyblom para estabilidad de parámetros
+bind_rows(
+  fit |>
+    nyblom() |>
+    pluck("IndividualStat") |>
+    as.data.frame() |>
+    rownames_to_column(var = "Parámetro") |>
+    select(Parámetro, Estadístico = V1) |>
+    mutate(tipo = "individual"),
+  fit |>
+    nyblom() |>
+    pluck("JointStat") |>
+    as_tibble() |>
+    mutate(Parámetro = "Estadístico conjunto") |>
+    select(Parámetro, Estadístico = value) |>
+    mutate(tipo = "conjunto")
+) |>
+  left_join(
+    bind_rows(
+      fit |>
+        nyblom() |>
+        pluck("IndividualCritical") |>
+        t() |>
+        as.data.frame() |>
+        mutate(tipo = "individual"),
+      fit |>
+        nyblom() |>
+        pluck("JointCritical") |>
+        t() |>
+        as.data.frame() |>
+        mutate(tipo = "conjunto")
+    ),
+    by = c("tipo" = "tipo")
+  ) |>
+  select(-tipo) |>
+  mutate(Estadístico = Estadístico |> round(3)) |>
+  flextable() |>
+  set_caption(caption = "Prueba de estabilidad de Nyblom") |>
+  set_table_properties(layout = "autofit")
+```
+
+## Out-of-Sample
+
+### Predicción Out-of-Sample
+
+```{r}
+#| label: fig-prediccion
+#| fig-height: 5
+#| echo: false
+#| warning: false
+
+# Datos out-of-sample
+nasdaq100_out_of_sample <-
+  Ticker$new("NQ=F")$get_history(
+    start = "2025-01-01",
+    end = "2025-08-31",
+    interval = "1d"
+  ) |>
+  select(date, close) |>
+  mutate(
+    date = date(date),
+    close = ifelse(is.na(close), stats::lag(close), close),
+    performance = c(NA, diff(log(close), lag = 1)),
+  ) |>
+  as_tibble() |>
+  drop_na()
+
+# Forecast
+forecast <-
+  ugarchforecast(
+    fit = fit,
+    n.ahead = nrow(nasdaq100_out_of_sample),
+    n.roll = 0,
+    out.sample = 0,
+    data = nasdaq100_out_of_sample$performance
+  )
+
+# Gráfico de predicción
+data.frame(
+  Date = nasdaq100_out_of_sample$date,
+  Real = nasdaq100_out_of_sample$performance,
+  Fitted = fitted(forecast)[1:nrow(nasdaq100_out_of_sample)],
+  Lower = fitted(forecast)[1:nrow(nasdaq100_out_of_sample)] - 2 * sigma(forecast)[1:nrow(nasdaq100_out_of_sample)],
+  Upper = fitted(forecast)[1:nrow(nasdaq100_out_of_sample)] + 2 * sigma(forecast)[1:nrow(nasdaq100_out_of_sample)]
+) |>
+  ggplot(aes(x = Date)) +
+  geom_line(aes(y = Fitted), color = "blue", size = 0.8) +
+  geom_ribbon(aes(ymin = Lower, ymax = Upper), fill = "lightblue", alpha = 0.5) +
+  geom_line(aes(y = Real), color = "red", size = 0.8) +
+  scale_x_date(
+    date_labels = "%Y-%b",
+    date_breaks = "1 month",
+    expand = expansion(mult = c(0, 0.05))
+  ) +
+  labs(
+    title = "Predicción Out-of-Sample del Modelo EGARCH-M(1,1)",
+    subtitle = "Rendimientos reales vs. predichos (enero-agosto 2025)",
+    x = "",
+    y = "Rendimiento",
+    caption = "Banda azul: ±2σ(t) | Línea roja: Rendimientos reales | Línea azul: Predicción"
+  ) +
+  scale_y_continuous(
+    labels = label_percent(big.mark = ".", decimal.mark = ","),
+    expand = expansion(mult = c(0.05, 0.05))
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+```
+
+### Medidas de Desempeño
+
+```{r}
+#| label: tbl-desempeno
+#| echo: false
+#| warning: false
+
+# Calcular métricas de desempeño
+in_sample_metrics <- nasdaq100 |>
+  summarise(
+    Período = "In-sample (2015-2024)",
+    RMSE = sqrt(mean((performance - fitted(fit))^2, na.rm = TRUE)),
+    MAE = mean(abs(performance - fitted(fit)), na.rm = TRUE)
+  )
+
+out_sample_metrics <- nasdaq100_out_of_sample |>
+  summarise(
+    Período = "Out-of-sample (2025)",
+    RMSE = sqrt(mean((performance - fitted(forecast)[1:nrow(nasdaq100_out_of_sample)])^2, na.rm = TRUE)),
+    MAE = mean(abs(performance - fitted(forecast)[1:nrow(nasdaq100_out_of_sample)]), na.rm = TRUE)
+  )
+
+bind_rows(in_sample_metrics, out_sample_metrics) |>
+  mutate(
+    RMSE = round(RMSE, 4),
+    MAE = round(MAE, 4)
+  ) |>
+  flextable() |>
+  set_header_labels(
+    Período = "Período",
+    RMSE = "RMSE",
+    MAE = "MAE"
+  ) |>
+  width(j = 1, width = 2.5) |>
+  width(j = 2:3, width = 1.5) |>
+  theme_box()
+```
+
+## Hallazgos
+
+1. **Efecto Leverage Confirmado**: Los choques negativos aumentan más la volatilidad (γ₁ > 0)
+2. **Alta Persistencia**: β₁ ≈ 0.99 indica que la volatilidad persiste en el tiempo
+3. **Prima de Riesgo Positiva**: λ > 0 confirma que mayor volatilidad implica mayor rendimiento esperado
+4. **Impacto COVID-19**: δ > 0 captura el aumento de volatilidad durante la crisis
+5. **Distribución Apropiada**: $\mathcal T$ de Student asimétrica mejor que normal para colas pesadas
+
+\
+
+::: {.columns}
+
+::: {.column width="50%"}
+### Limitaciones
+- Suavizamiento de saltos abruptos
+- Parámetros no estables en el tiempo
+- Dependencia de valores iniciales
+:::
+
+::: {.column width="50%"}
+### Extensiones
+- Incorporar variables exógenas (VIX, tasas)
+- Modelos multivariados
+- Análisis de co-volatilidad
+- Modelos con cambio de régimen
+:::
+
+:::
+
+---
+
+## Conclusiones
+
+\
+
+::: {.callout-tip}
+## Conclusión Principal
+
+El modelo **EGARCH-M(1,1)** con distribución $\mathcal T$ **de Student asimétrica** parece suficiente para modelar la volatilidad del NASDAQ-100 durante este período, capturando:
+
+- ✅ **Clusters de volatilidad**
+- ✅ **Efecto leverage**  
+- ✅ **Colas pesadas**
+- ✅ **Prima de riesgo por volatilidad**
+- ✅ **Impactos de crisis externas**
+:::
+
+---
+
+## \
+
+
+::: {.r-fit-text}
+**Preguntas y comentarios**
+:::
+
+:::: {.columns}
+
+::: {.column width="60%"}
+
+::: {style="margin-top: 2em; text-align: center; font-size: 0.8em;"}
+Agradecimiento al **Lic. Carlos Jara**
+
+\
+
+**Estadístico Emilio Correa Dávola**  
+UNTreF  
+correa42609@estudiantes.untref.edu.ar
+:::
+
+:::
+
+::: {.column width="40%"}
+
+```{r}
+#| label: qr-github
+#| echo: false
+#| warning: false
+#| fig-align: center
+#| fig-height: 3
+#| fig-width: 3
+#| fig-asp: 1
+
+# Generar QR code para GitHub
+qr_github <- qr_code("https://github.com/emiliodavola/nasdaq-100-coloquio-2025")
+plot(qr_github)
+```
+:::
+
+::::
