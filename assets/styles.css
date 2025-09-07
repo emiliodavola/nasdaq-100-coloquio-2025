@@ -1,0 +1,271 @@
+/* Estilos personalizados para la presentación */
+
+.reveal {
+  font-family: "Arial", sans-serif;
+  font-size: 32px; /* Reducir tamaño base de fuente */
+}
+
+.reveal h1 {
+  color: #2c3e50;
+  text-shadow: none;
+  font-size: 2.2em; /* Reducir títulos principales */
+}
+
+.reveal h2 {
+  color: #2c3e50;
+  text-shadow: none;
+  font-size: 1.4em; /* Reducir títulos de sección */
+}
+
+.reveal h3 {
+  color: #2c3e50;
+  text-shadow: none;
+  font-size: 1.0em; /* Reducir subtítulos */
+}
+
+.reveal .slides section .fragment.highlight-current-blue {
+  opacity: 1;
+  visibility: inherit;
+}
+
+.reveal .slides section .fragment.highlight-current-blue.current-fragment {
+  color: #1f77b4;
+  font-weight: bold;
+}
+
+/* Mejorar las tablas */
+.flextable {
+  border-collapse: collapse;
+  margin: 0 auto;
+  font-size: 0.7em; /* Reducir más el tamaño de texto en tablas */
+}
+
+.flextable td, .flextable th {
+  font-size: 0.75em; /* Texto más pequeño en celdas */
+  padding: 0.3em 0.5em; /* Reducir padding para más compacto */
+}
+
+/* Estilo para las notas importantes */
+.callout-important {
+  border-left: 4px solid #e74c3c;
+  background-color: #fdf2f2;
+  padding: 1em;
+  margin: 1em 0;
+  font-size: 0.9em; /* Reducir texto en callouts */
+}
+
+.callout-note {
+  border-left: 4px solid #3498db;
+  background-color: #f0f8ff;
+  padding: 1em;
+  margin: 1em 0;
+  font-size: 0.9em; /* Reducir texto en callouts */
+}
+
+.callout-tip {
+  border-left: 4px solid #27ae60;
+  background-color: #f0fff0;
+  padding: 1em;
+  margin: 1em 0;
+  font-size: 0.9em; /* Reducir texto en callouts */
+}
+
+/* Mejorar el texto de código */
+.reveal code {
+  background-color: #f8f9fa;
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  color: #e83e8c;
+}
+
+/* Estilo para ecuaciones */
+.reveal .MathJax {
+  font-size: 1.1em !important;
+}
+
+/* Mejorar la legibilidad */
+.reveal .slides > section {
+  line-height: 1.4;
+  font-size: 0.9em; /* Reducir texto general de slides */
+}
+
+/* Texto de contenido de slides */
+.reveal p {
+  font-size: 0.9em; /* Reducir párrafos */
+}
+
+.reveal ul, .reveal ol {
+  font-size: 0.85em; /* Reducir listas */
+}
+
+.reveal li {
+  margin-bottom: 0.3em; /* Ajustar espaciado entre elementos de lista */
+}
+
+/* Estilo para listas incrementales */
+.reveal .slides section .incremental > * {
+  opacity: 0.5;
+}
+
+.reveal .slides section .incremental > *.current-fragment {
+  opacity: 1;
+}
+
+/* Ajustar columnas */
+.reveal .columns {
+  font-size: 0.85em;
+}
+
+/* Footer más pequeño */
+.reveal .footer {
+  font-size: 0.7em;
+}
+
+/* Botón de cambio de tema */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.1);
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.theme-toggle:hover {
+  background: rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
+}
+
+/* Forzar tema claro por defecto - sobrescribir tema night */
+.reveal {
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+}
+
+.reveal .backgrounds {
+  background: #ffffff !important;
+}
+
+.reveal .slides section {
+  color: #333333 !important;
+  background: transparent !important;
+}
+
+.reveal h1, .reveal h2, .reveal h3, .reveal h4, .reveal h5, .reveal h6 {
+  color: #2c3e50 !important;
+  text-shadow: none !important;
+}
+
+.reveal p, .reveal li, .reveal span, .reveal td, .reveal th {
+  color: #333333 !important;
+}
+
+.reveal .flextable {
+  background: #ffffff !important;
+  color: #333333 !important;
+}
+
+.reveal .flextable td, .reveal .flextable th {
+  background: #ffffff !important;
+  color: #333333 !important;
+  border-color: #cccccc !important;
+}
+
+.reveal .callout-important {
+  background-color: #fdf2f2 !important;
+  color: #333333 !important;
+}
+
+.reveal .callout-note {
+  background-color: #f0f8ff !important;
+  color: #333333 !important;
+}
+
+.reveal .callout-tip {
+  background-color: #f0fff0 !important;
+  color: #333333 !important;
+}
+
+/* Tema oscuro - se activa con la clase dark-theme */
+.reveal.dark-theme {
+  background: #1a1a1a !important;
+  background-color: #1a1a1a !important;
+}
+
+.reveal.dark-theme .backgrounds {
+  background: #1a1a1a !important;
+}
+
+.reveal.dark-theme .slides section {
+  color: #ffffff !important;
+  background: transparent !important;
+}
+
+.reveal.dark-theme h1, .reveal.dark-theme h2, .reveal.dark-theme h3, 
+.reveal.dark-theme h4, .reveal.dark-theme h5, .reveal.dark-theme h6 {
+  color: #ffffff !important;
+  text-shadow: none !important;
+}
+
+.reveal.dark-theme p, .reveal.dark-theme li, .reveal.dark-theme span, 
+.reveal.dark-theme td, .reveal.dark-theme th, .reveal.dark-theme div,
+.reveal.dark-theme strong, .reveal.dark-theme em, .reveal.dark-theme code,
+.reveal.dark-theme pre, .reveal.dark-theme blockquote, .reveal.dark-theme a {
+  color: #ffffff !important;
+}
+
+/* Forzar color blanco en todos los elementos de texto */
+.reveal.dark-theme * {
+  color: #ffffff !important;
+}
+
+/* Excepciones para elementos que deben mantener sus colores */
+.reveal.dark-theme .theme-toggle {
+  color: initial !important;
+}
+
+.reveal.dark-theme .flextable {
+  background: #2a2a2a !important;
+  color: #ffffff !important;
+}
+
+.reveal.dark-theme .flextable td, .reveal.dark-theme .flextable th {
+  background: #2a2a2a !important;
+  color: #ffffff !important;
+  border-color: #444444 !important;
+}
+
+.reveal.dark-theme .callout-important {
+  background-color: #2a1a1a !important;
+  color: #ffffff !important;
+}
+
+.reveal.dark-theme .callout-note {
+  background-color: #1a1a2a !important;
+  color: #ffffff !important;
+}
+
+.reveal.dark-theme .callout-tip {
+  background-color: #1a2a1a !important;
+  color: #ffffff !important;
+}
+
+/* Ajustar el botón según el tema */
+.reveal.dark-theme .theme-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.reveal.dark-theme .theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
