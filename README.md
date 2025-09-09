@@ -12,8 +12,7 @@ Este repositorio contiene la presentación del análisis econométrico completo 
 ├── report/                  # Presentaciones
 │   └── presentacion.html    # Presentación HTML renderizada
 ├── assets/                  # Recursos estáticos
-│   ├── styles.css           # Estilos personalizados para reveal.js
-│   └── theme-toggle.html    # Componente de cambio de tema
+│   └── styles.css           # Estilos personalizados para reveal.js
 ├── .gitignore               # Archivos ignorados por Git
 ├── LICENSE                  # Licencia del proyecto
 └── README.md                # Documentación principal
