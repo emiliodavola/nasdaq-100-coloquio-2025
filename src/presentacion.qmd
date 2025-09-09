@@ -15,12 +15,11 @@ format:
     code-block-background: true
     code-block-border-left: "#31BAE9"
     slide-number: true
-    footer: "UNTreF"
+    footer: "UNTREF"
     logo: ""
     css: ../assets/styles.css
     self-contained: true
     embed-resources: true
-    include-after-body: ../assets/theme-toggle.html
 lang: es-ES
 ---
 
