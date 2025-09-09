@@ -7,12 +7,12 @@ Este repositorio contiene la presentación del análisis econométrico completo 
 ## Estructura del Repositorio
 
 ```
-├── src/                     # Código fuente y presentaciones
+├── src/                     # Código fuente
 │   ├── presentacion.qmd     # Documento Quarto con análisis completo
+├── report/                  # Presentaciones
 │   └── presentacion.html    # Presentación HTML renderizada
 ├── assets/                  # Recursos estáticos
-│   ├── styles.css           # Estilos personalizados para reveal.js
-│   └── theme-toggle.html    # Componente de cambio de tema
+│   └── styles.css           # Estilos personalizados para reveal.js
 ├── .gitignore               # Archivos ignorados por Git
 ├── LICENSE                  # Licencia del proyecto
 └── README.md                # Documentación principal
@@ -20,4 +20,4 @@ Este repositorio contiene la presentación del análisis econométrico completo 
 
 ## Presentación
 
-Abrir `src/presentacion.html` en el navegador.
+Abrir `report/presentacion.html` en el navegador.
