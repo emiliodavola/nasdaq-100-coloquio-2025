@@ -21,6 +21,9 @@ format:
     self-contained: true
     embed-resources: true
 lang: es-ES
+bibliography: referencias.bib
+csl: https://www.zotero.org/styles/apa
+nocite: '@*'
 ---
 
 ```{r}
