@@ -318,7 +318,7 @@ nasdaq100 |>
 
 ::: {.column width="47.5%"}
 
-### Evolución de Kurtosis y Asimetría
+### Evolución de Exceso de Kurtosis y Asimetría
 
 ```{r}
 #| label: fig-kurtosis-asimetria
@@ -1218,3 +1218,8 @@ plot(qr_github)
 :::
 
 ::::
+
+# Referencias {.center}
+
+::: {.refs}
+:::
